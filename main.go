@@ -22,7 +22,6 @@ var (
 	targetPort int
 	payloadLen int
 	interval   int
-	isIPv6     bool
 )
 
 var (
@@ -39,7 +38,6 @@ func init() {
 	flag.IntVar(&targetPort, "port", 0, "Target port")
 	flag.IntVar(&payloadLen, "len", defaultLen, "Payload length in bytes")
 	flag.IntVar(&interval, "interval", defaultInterval, "Interval in milliseconds")
-	flag.BoolVar(&isIPv6, "6", false, "Use IPv6")
 }
 
 func randomString(length int) string {
@@ -73,6 +71,7 @@ func signalHandler() {
 }
 
 func createConnection() (*net.UDPConn, error) {
+	isIPv6 := strings.Contains(targetIP, ":")
 	if isIPv6 {
 		return net.DialUDP("udp6", nil, &net.UDPAddr{
 			IP:   net.ParseIP(targetIP),
@@ -94,11 +93,10 @@ func main() {
 		fmt.Println("options:")
 		fmt.Println("  -len        Payload length in bytes (default: 64)")
 		fmt.Println("  -interval   Interval between packets in milliseconds (default: 1000)")
-		fmt.Println("  -6          Use IPv6")
 		fmt.Println()
 		fmt.Println("examples:")
 		fmt.Println("  udpping 44.55.66.77 4000")
-		fmt.Println("  udpping fe80::5400:ff:aabb:ccdd 4000 -6")
+		fmt.Println("  udpping fe80::5400:ff:aabb:ccdd 4000")
 		fmt.Println("  udpping 44.55.66.77 4000 -len=400 -interval=2000")
 	}
 
@@ -125,14 +123,8 @@ func main() {
 				fmt.Sscanf(arg, "-len=%d", &payloadLen)
 			} else if strings.HasPrefix(arg, "-interval=") {
 				fmt.Sscanf(arg, "-interval=%d", &interval)
-			} else if arg == "-6" {
-				isIPv6 = true
 			}
 		}
-	}
-
-	if strings.Contains(targetIP, ":") {
-		isIPv6 = true
 	}
 
 	if payloadLen < 5 {
@@ -199,9 +191,10 @@ func main() {
 			}
 
 			receivedData := string(buf[:n])
-			receivedIP := addr.IP.String()
+			targetIPNormalized := net.ParseIP(targetIP)
+			receivedIPNormalized := addr.IP
 
-			if receivedData == payload && receivedIP == targetIP && addr.Port == targetPort {
+			if receivedData == payload && receivedIPNormalized.Equal(targetIPNormalized) && addr.Port == targetPort {
 				rtt = float64(time.Since(timeOfSend).Microseconds()) / 1000.0
 				fmt.Printf("Reply from %s seq=%d time=%.2f ms\n", targetIP, count, rtt)
 				received = true
